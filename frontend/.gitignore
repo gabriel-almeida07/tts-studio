@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.pyc
+audio_gerado_pela_api.mp3
+build/
+dist/
+*.spec
