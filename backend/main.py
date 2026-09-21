@@ -1,6 +1,3 @@
-import sys
-if sys.platform == 'win32':
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 import asyncio
 import edge_tts
 import os
@@ -10,7 +7,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
 import sys
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
+app = FastAPI(title="TTS Creator API", description="API RESTful para geração de áudios neurais contínuos.")
 
 app.add_middleware(
     CORSMiddleware,

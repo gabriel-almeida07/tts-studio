@@ -74,7 +74,7 @@ class TTSClientApp(ctk.CTk):
             payload = {"personagens": personagens, "roteiro": roteiro}
 
             # Chama a API RESTful que construímos no backend
-            resposta = requests.post("http://localhost:8000/gerar", json=payload)
+            resposta = requests.post("https://tts-studio-api.onrender.com/gerar", json=payload)
 
             if resposta.status_code == 200:
                 caminho_salvar = os.path.join(os.getcwd(), "audio_gerado_pela_api.mp3")
