@@ -3,6 +3,7 @@ from tkinter import filedialog
 import requests
 import threading
 import os
+import re
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -50,7 +51,7 @@ class TTSClientApp(ctk.CTk):
 
         # Dicionário para guardar as referências dos formulários: {"DAVI": {"voz": widget, "pitch": widget}}
         self.personagens_widgets = {}
-        self.caminho_salvar = None  # <--- NOVA VARIÁVEL AQUI
+        self.pasta_destino = None  # <--- NOVA VARIÁVEL AQUI
 
         # ================= PAINEL ESQUERDO: Personagens (Dinâmico) =================
         self.frame_config = ctk.CTkFrame(self)
@@ -80,17 +81,29 @@ class TTSClientApp(ctk.CTk):
         self.frame_exportacao = ctk.CTkFrame(self.frame_roteiro, fg_color="transparent")
         self.frame_exportacao.pack(pady=5, fill="x")
 
-        self.btn_escolher_destino = ctk.CTkButton(self.frame_exportacao, text="📁 1. Escolher onde Salvar", command=self.escolher_destino, fg_color="#1971c2", hover_color="#1864ab", width=180)
-        self.btn_escolher_destino.pack(pady = (0, 10))
+        # Botão 1: Escolhe a Pasta
+        self.btn_escolher_pasta = ctk.CTkButton(self.frame_exportacao, text="📁 1. Escolher Pasta Destino", command=self.escolher_pasta, fg_color="#1971c2", hover_color="#1864ab", width=180)
+        self.btn_escolher_pasta.pack(pady=(0, 10))
 
-        self.lbl_destino = ctk.CTkLabel(self.frame_exportacao, text="Nenhum destino selecionado...", text_color="gray")
-        self.lbl_destino.pack(pady = (0, 10))
+        self.lbl_pasta = ctk.CTkLabel(self.frame_exportacao, text="Nenhuma pasta selecionada...", text_color="gray")
+        self.lbl_pasta.pack(pady=(0, 10))
+
+        # Campo 2: Nome do Arquivo
+        self.frame_nome = ctk.CTkFrame(self.frame_exportacao, fg_color="transparent")
+        self.frame_nome.pack(pady=(0, 10), fill="x")
+        
+        self.lbl_nome = ctk.CTkLabel(self.frame_nome, text="Nome do Arquivo:")
+        self.lbl_nome.pack(side="left", padx=(0, 10))
+        
+        self.entry_nome_arquivo = ctk.CTkEntry(self.frame_nome, width=150)
+        self.entry_nome_arquivo.insert(0, "parte1") # Já vem preenchido por padrão!
+        self.entry_nome_arquivo.pack(side="left", fill="x", expand=True)
         # ============================================================
 
-        # O botão de gerar agora nasce DESATIVADO (state="disabled")
+        # Botão de Gerar
         self.btn_gerar = ctk.CTkButton(self.frame_roteiro, text="🎙️ 2. Solicitar Áudio à API", command=self.iniciar_requisicao, height=40, state="disabled")
         self.btn_gerar.pack(pady=10)
-
+        
         self.label_status = ctk.CTkLabel(self.frame_roteiro, text="Pronto para edição.", text_color="gray")
         self.label_status.pack(pady=5)
 
@@ -200,39 +213,67 @@ class TTSClientApp(ctk.CTk):
             resposta = requests.post("http://localhost:8000/gerar", json=payload)
 
             if resposta.status_code == 200:
-                # O caminho já foi escolhido lá no começo! É só salvar.
-                with open(self.caminho_salvar, "wb") as f:
+                # 1. Pega o nome digitado e garante que termine em .mp3
+                nome_arq = self.entry_nome_arquivo.get().strip()
+                if not nome_arq.lower().endswith(".mp3"):
+                    nome_arq += ".mp3"
+                    
+                # 2. Junta a pasta selecionada com o nome do arquivo
+                caminho_completo = os.path.join(self.pasta_destino, nome_arq)
+                
+                # 3. Salva o arquivo no HD
+                with open(caminho_completo, "wb") as f:
                     f.write(resposta.content)
                     
-                # Usa self.after para atualizar o texto com segurança a partir da thread
-                self.after(0, lambda: self.label_status.configure(text=f"✅ Áudio salvo com sucesso!", text_color="green"))
+                # 4. Avisa sucesso, reativa o botão e CHAMA O INCREMENTO!
+                def sucesso_ui():
+                    self.label_status.configure(text=f"✅ Salvo como {nome_arq}", text_color="green")
+                    self.btn_gerar.configure(state="normal", text="🎙️ 2. Solicitar Áudio à API")
+                    self.auto_incrementar_nome()
+                    
+                self.after(0, sucesso_ui)
+                
             else:
                 self.after(0, lambda: self.label_status.configure(text=f"❌ Erro na API: {resposta.status_code}", text_color="red"))
-
+                self.after(0, lambda: self.btn_gerar.configure(state="normal", text="🎙️ 2. Solicitar Áudio à API"))
+                
         except Exception as e:
             self.after(0, lambda: self.label_status.configure(text=f"❌ Erro: {str(e)}", text_color="red"))
-        finally:
-            # Reativa o botão para permitir gerar novamente se ele alterar o roteiro
             self.after(0, lambda: self.btn_gerar.configure(state="normal", text="🎙️ 2. Solicitar Áudio à API"))
             
-    def escolher_destino(self):
-        caminho = filedialog.asksaveasfilename(
-            defaultextension=".mp3",
-            initialfile="meu_roteiro.mp3",
-            title="Escolha a pasta e o nome do arquivo",
-            filetypes=[("Arquivos MP3", "*.mp3")]
-        )
+    def escolher_pasta(self):
+        caminho = filedialog.askdirectory(title="Escolha a pasta para salvar os áudios")
         
         if caminho:
-            self.caminho_salvar = caminho
+            self.pasta_destino = caminho
             
-            # Corta o texto se o caminho for muito grande para não quebrar o layout
+            # Corta o texto se o caminho for muito grande
             texto_exibicao = caminho if len(caminho) < 45 else "..." + caminho[-42:]
-            self.lbl_destino.configure(text=texto_exibicao, text_color="white")
+            self.lbl_pasta.configure(text=texto_exibicao, text_color="white")
             
-            # LIBERA O BOTÃO DE GERAR!
+            # Libera o botão de gerar
             self.btn_gerar.configure(state="normal")
             self.label_status.configure(text="Destino configurado. Clique em Solicitar Áudio.", text_color="green")
+
+    def auto_incrementar_nome(self):
+        nome_atual = self.entry_nome_arquivo.get().strip()
+        
+        # Procura qualquer texto + "parte" + números + (qualquer coisa no final)
+        # Ex: "video_parte1" -> match.group(1)="video_parte", match.group(2)="1"
+        match = re.search(r'(.*parte)(\d+)(.*)', nome_atual, flags=re.IGNORECASE)
+        
+        if match:
+            prefixo = match.group(1)
+            numero_atual = int(match.group(2))
+            sufixo = match.group(3)
+            
+            # Soma +1 e remonta a string
+            novo_nome = f"{prefixo}{numero_atual + 1}{sufixo}"
+            
+            # Atualiza o campo de texto na interface
+            self.entry_nome_arquivo.delete(0, "end")
+            self.entry_nome_arquivo.insert(0, novo_nome)
+    
 if __name__ == "__main__":
     app = TTSClientApp()
     app.mainloop()
