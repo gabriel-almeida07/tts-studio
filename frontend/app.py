@@ -1,9 +1,10 @@
 import customtkinter as ctk
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 import requests
 import threading
 import os
 import re
+import urllib.parse
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -33,6 +34,7 @@ class TTSClientApp(ctk.CTk):
         ]
         
         self.vozes_masc = [
+            "en-CA-ClaraNeural",
             # Nativos
             "pt-BR-AntonioNeural",
             "pt-PT-DuarteNeural", # Sotaque de Portugal
@@ -225,18 +227,32 @@ class TTSClientApp(ctk.CTk):
                 with open(caminho_completo, "wb") as f:
                     f.write(resposta.content)
                     
-                # 4. Avisa sucesso, reativa o botão e CHAMA O INCREMENTO!
+                # === INTERCEPTA E DECODIFICA OS AVISOS DO BACKEND ===
+                avisos_header = resposta.headers.get("X-Avisos")
+                alertas = ""
+                if avisos_header:
+                    avisos_decodificados = urllib.parse.unquote(avisos_header)
+                    # Quebra o texto de volta para lista e junta com quebra de linha (\n)
+                    alertas = "\n\n".join(avisos_decodificados.split("||"))
+                    
                 def sucesso_ui():
                     self.label_status.configure(text=f"✅ Salvo como {nome_arq}", text_color="green")
                     self.btn_gerar.configure(state="normal", text="🎙️ 2. Solicitar Áudio à API")
                     self.auto_incrementar_nome()
+                    
+                    # SE TIVER ALERTA, MOSTRA O POP-UP!
+                    if alertas:
+                        messagebox.showwarning(
+                            title="⚠️ Atenção: Substituição de Vozes",
+                            message=f"O áudio foi salvo, mas algumas vozes falharam e o sistema usou o fallback de segurança:\n\n{alertas}"
+                        )
                     
                 self.after(0, sucesso_ui)
                 
             else:
                 self.after(0, lambda: self.label_status.configure(text=f"❌ Erro na API: {resposta.status_code}", text_color="red"))
                 self.after(0, lambda: self.btn_gerar.configure(state="normal", text="🎙️ 2. Solicitar Áudio à API"))
-                
+
         except Exception as e:
             self.after(0, lambda: self.label_status.configure(text=f"❌ Erro: {str(e)}", text_color="red"))
             self.after(0, lambda: self.btn_gerar.configure(state="normal", text="🎙️ 2. Solicitar Áudio à API"))

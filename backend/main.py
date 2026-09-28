@@ -3,6 +3,7 @@ import asyncio
 import edge_tts
 import os
 import shutil
+import urllib.parse
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -52,30 +53,23 @@ def limpar_metadados_mp3(caminho):
 async def gerar_audio(req: TTSRequest):
     vozes_map = {p.nome.upper(): (p.voz, p.pitch, p.rate) for p in req.personagens}
     
-    
     os.makedirs("temp_audios", exist_ok=True)
     arquivos_temp = []
+    avisos_frontend = [] 
     
     print("\n--- INICIANDO NOVA GERAÇÃO DE ÁUDIO ---")
     
     for idx, linha in enumerate(req.roteiro):
         fala_limpa = linha.fala.strip()
-        
-        
         if not fala_limpa:
-            print(f"⚠️ Aviso: Linha {idx} ignorada porque está vazia.")
             continue
             
         nome_personagem = linha.personagem.strip().upper()
-        
         
         if nome_personagem in vozes_map:
             voz, tom, vel = vozes_map[nome_personagem]
         else:
             voz, tom, vel = ("pt-BR-AntonioNeural", "+0Hz", "+15%")
-            
-
-        print(f"🗣️ Processando -> {nome_personagem} | Voz: {voz} | Tom: {tom} | Texto: '{fala_limpa}'")
 
         temp_file = f"temp_audios/temp_{idx}.mp3"
         
@@ -83,24 +77,23 @@ async def gerar_audio(req: TTSRequest):
             communicate = edge_tts.Communicate(fala_limpa, voz, pitch=tom, rate=vel)
             await communicate.save(temp_file)
             arquivos_temp.append(temp_file)
+            
         except Exception as e:
-            print(f"⚠️ Erro com a voz '{voz}': {e}. Acionando Fallback de Segurança!")
+            # ERRO CAPTURADO! Registra o aviso para o Frontend
+            msg_aviso = f"Fala {idx+1} ({nome_personagem}): A voz '{voz}' falhou e foi substituída pelo Antonio."
+            avisos_frontend.append(msg_aviso)
+            print(f"⚠️ Erro técnico com '{voz}': {e}. Fallback acionado!")
+            
             try:
-                # Troca a voz problemática pelo Antonio
-                voz_fallback = "pt-BR-AntonioNeural" 
-                
-                # Gera o áudio novamente
+                voz_fallback = "pt-BR-AntonioNeural"
                 communicate_fallback = edge_tts.Communicate(fala_limpa, voz_fallback, pitch=tom, rate=vel)
                 await communicate_fallback.save(temp_file)
                 arquivos_temp.append(temp_file)
             except Exception as e_fallback:
-                # Se até o Antonio falhar (ex: você ficou sem internet no meio do processo),
-                # ele apenas avisa e pula a frase, garantindo que o servidor NUNCA caia.
-                print(f"❌ Erro fatal na linha: {e_fallback}")   
+                print(f"❌ Erro fatal na linha {idx}: {e_fallback}")
             
     if not arquivos_temp:
         shutil.rmtree("temp_audios", ignore_errors=True)
-        print("❌ Nenhum áudio foi gerado com sucesso.")
         return {"erro": "Falha total na geração do áudio."}
             
     arquivo_final = "dialogo_final.mp3"
@@ -108,11 +101,19 @@ async def gerar_audio(req: TTSRequest):
         for f in arquivos_temp:
             outfile.write(limpar_metadados_mp3(f))
             
-    # Limpeza absoluta: apaga a pasta e TUDO que houver dentro dela, ignorando arquivos fantasmas
     shutil.rmtree("temp_audios", ignore_errors=True)
     
+    # === PREPARA O CABEÇALHO COM OS AVISOS ===
+    headers = {}
+    if avisos_frontend:
+        # Junta todos os erros com "||" e codifica para enviar na rede
+        texto_avisos = "||".join(avisos_frontend)
+        headers["X-Avisos"] = urllib.parse.quote(texto_avisos)
+    
     print("✅ Áudio final gerado com sucesso!")
-    return FileResponse(arquivo_final, media_type="audio/mpeg", filename="audio_roteiro.mp3")
+    # Envia o arquivo e embute os headers
+    return FileResponse(arquivo_final, media_type="audio/mpeg", filename="audio_roteiro.mp3", headers=headers)
+
 
 if __name__ == "__main__":
     import uvicorn
