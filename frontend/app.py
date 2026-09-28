@@ -50,6 +50,7 @@ class TTSClientApp(ctk.CTk):
 
         # Dicionário para guardar as referências dos formulários: {"DAVI": {"voz": widget, "pitch": widget}}
         self.personagens_widgets = {}
+        self.caminho_salvar = None  # <--- NOVA VARIÁVEL AQUI
 
         # ================= PAINEL ESQUERDO: Personagens (Dinâmico) =================
         self.frame_config = ctk.CTkFrame(self)
@@ -71,39 +72,27 @@ class TTSClientApp(ctk.CTk):
         self.caixa_roteiro.pack(padx=10, pady=10, fill="both", expand=True)
         self.caixa_roteiro.insert("0.0", "DAVI: Oi, testando a interface nova!\nJULIANA: Olha que incrível esse formulário visual.\nPOLICIAL: Mãos ao alto, parados!")
 
-        # Botões de Ação
+        # Botões de Ação Mágica
         self.btn_auto_config = ctk.CTkButton(self.frame_roteiro, text="🪄 Extrair Personagens do Roteiro", command=self.auto_configurar_personagens, fg_color="#2b8a3e", hover_color="#2f9e44", height=35)
         self.btn_auto_config.pack(pady=(0, 10))
 
-        self.btn_gerar = ctk.CTkButton(self.frame_roteiro, text="🎙️ Solicitar Áudio à API", command=self.iniciar_requisicao, height=40)
+        # ================= NOVA SEÇÃO DE EXPORTAÇÃO =================
+        self.frame_exportacao = ctk.CTkFrame(self.frame_roteiro, fg_color="transparent")
+        self.frame_exportacao.pack(pady=5, fill="x")
+
+        self.btn_escolher_destino = ctk.CTkButton(self.frame_exportacao, text="📁 1. Escolher onde Salvar", command=self.escolher_destino, fg_color="#1971c2", hover_color="#1864ab", width=180)
+        self.btn_escolher_destino.pack(pady = (0, 10))
+
+        self.lbl_destino = ctk.CTkLabel(self.frame_exportacao, text="Nenhum destino selecionado...", text_color="gray")
+        self.lbl_destino.pack(pady = (0, 10))
+        # ============================================================
+
+        # O botão de gerar agora nasce DESATIVADO (state="disabled")
+        self.btn_gerar = ctk.CTkButton(self.frame_roteiro, text="🎙️ 2. Solicitar Áudio à API", command=self.iniciar_requisicao, height=40, state="disabled")
         self.btn_gerar.pack(pady=10)
 
         self.label_status = ctk.CTkLabel(self.frame_roteiro, text="Pronto para edição.", text_color="gray")
         self.label_status.pack(pady=5)
-
-    def abrir_dialogo_salvar(self, audio_data):
-        """Abre a janela do Windows para o usuário escolher onde salvar o arquivo MP3"""
-        caminho_salvar = filedialog.asksaveasfilename(
-            defaultextension=".mp3",
-            initialfile="meu_roteiro.mp3",
-            title="Salvar Áudio Como...",
-            filetypes=[("Arquivos MP3", "*.mp3"), ("Todos os Arquivos", "*.*")]
-        )
-        
-        # Se o usuário escolheu uma pasta e clicou em Salvar (ou seja, não cancelou)
-        if caminho_salvar:
-            try:
-                with open(caminho_salvar, "wb") as f:
-                    f.write(audio_data)
-                self.label_status.configure(text=f"✅ Salvo em: {caminho_salvar}", text_color="green")
-            except Exception as e:
-                self.label_status.configure(text=f"❌ Erro ao salvar: {str(e)}", text_color="red")
-        else:
-            # Se o usuário fechou a janelinha ou clicou em Cancelar
-            self.label_status.configure(text="⚠️ Geração concluída, mas o salvamento foi cancelado.", text_color="yellow")
-            
-        # Reativa o botão
-        self.btn_gerar.configure(state="normal", text="🎙️ Solicitar Áudio à API")
 
     def adicionar_personagem_ui(self, nome, voz_padrao, pitch_padrao):
         """Cria uma nova linha de formulário visual para um personagem"""
@@ -211,16 +200,39 @@ class TTSClientApp(ctk.CTk):
             resposta = requests.post("http://localhost:8000/gerar", json=payload)
 
             if resposta.status_code == 200:
-                self.after(0, self.abrir_dialogo_salvar, resposta.content)
+                # O caminho já foi escolhido lá no começo! É só salvar.
+                with open(self.caminho_salvar, "wb") as f:
+                    f.write(resposta.content)
+                    
+                # Usa self.after para atualizar o texto com segurança a partir da thread
+                self.after(0, lambda: self.label_status.configure(text=f"✅ Áudio salvo com sucesso!", text_color="green"))
             else:
-                self.label_status.configure(text=f"❌ Erro na API: Código {resposta.status_code}", text_color="red")
-                self.btn_gerar.configure(state="normal", text="🎙️ Solicitar Áudio à API")
+                self.after(0, lambda: self.label_status.configure(text=f"❌ Erro na API: {resposta.status_code}", text_color="red"))
 
         except Exception as e:
-            self.label_status.configure(text=f"❌ Erro: {str(e)}", text_color="red")
-            self.btn_gerar.configure(state="normal", text="🎙️ Solicitar Áudio à API")
+            self.after(0, lambda: self.label_status.configure(text=f"❌ Erro: {str(e)}", text_color="red"))
+        finally:
+            # Reativa o botão para permitir gerar novamente se ele alterar o roteiro
+            self.after(0, lambda: self.btn_gerar.configure(state="normal", text="🎙️ 2. Solicitar Áudio à API"))
             
-
+    def escolher_destino(self):
+        caminho = filedialog.asksaveasfilename(
+            defaultextension=".mp3",
+            initialfile="meu_roteiro.mp3",
+            title="Escolha a pasta e o nome do arquivo",
+            filetypes=[("Arquivos MP3", "*.mp3")]
+        )
+        
+        if caminho:
+            self.caminho_salvar = caminho
+            
+            # Corta o texto se o caminho for muito grande para não quebrar o layout
+            texto_exibicao = caminho if len(caminho) < 45 else "..." + caminho[-42:]
+            self.lbl_destino.configure(text=texto_exibicao, text_color="white")
+            
+            # LIBERA O BOTÃO DE GERAR!
+            self.btn_gerar.configure(state="normal")
+            self.label_status.configure(text="Destino configurado. Clique em Solicitar Áudio.", text_color="green")
 if __name__ == "__main__":
     app = TTSClientApp()
     app.mainloop()
