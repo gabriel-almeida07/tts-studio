@@ -1,4 +1,5 @@
 import customtkinter as ctk
+from tkinter import filedialog
 import requests
 import threading
 import os
@@ -79,6 +80,30 @@ class TTSClientApp(ctk.CTk):
 
         self.label_status = ctk.CTkLabel(self.frame_roteiro, text="Pronto para edição.", text_color="gray")
         self.label_status.pack(pady=5)
+
+    def abrir_dialogo_salvar(self, audio_data):
+        """Abre a janela do Windows para o usuário escolher onde salvar o arquivo MP3"""
+        caminho_salvar = filedialog.asksaveasfilename(
+            defaultextension=".mp3",
+            initialfile="meu_roteiro.mp3",
+            title="Salvar Áudio Como...",
+            filetypes=[("Arquivos MP3", "*.mp3"), ("Todos os Arquivos", "*.*")]
+        )
+        
+        # Se o usuário escolheu uma pasta e clicou em Salvar (ou seja, não cancelou)
+        if caminho_salvar:
+            try:
+                with open(caminho_salvar, "wb") as f:
+                    f.write(audio_data)
+                self.label_status.configure(text=f"✅ Salvo em: {caminho_salvar}", text_color="green")
+            except Exception as e:
+                self.label_status.configure(text=f"❌ Erro ao salvar: {str(e)}", text_color="red")
+        else:
+            # Se o usuário fechou a janelinha ou clicou em Cancelar
+            self.label_status.configure(text="⚠️ Geração concluída, mas o salvamento foi cancelado.", text_color="yellow")
+            
+        # Reativa o botão
+        self.btn_gerar.configure(state="normal", text="🎙️ Solicitar Áudio à API")
 
     def adicionar_personagem_ui(self, nome, voz_padrao, pitch_padrao):
         """Cria uma nova linha de formulário visual para um personagem"""
@@ -186,17 +211,15 @@ class TTSClientApp(ctk.CTk):
             resposta = requests.post("http://localhost:8000/gerar", json=payload)
 
             if resposta.status_code == 200:
-                caminho_salvar = os.path.join(os.getcwd(), "audio_gerado_pela_api.mp3")
-                with open(caminho_salvar, "wb") as f:
-                    f.write(resposta.content)
-                self.label_status.configure(text=f"✅ Sucesso! Áudio salvo na pasta atual.", text_color="green")
+                self.after(0, self.abrir_dialogo_salvar, resposta.content)
             else:
                 self.label_status.configure(text=f"❌ Erro na API: Código {resposta.status_code}", text_color="red")
+                self.btn_gerar.configure(state="normal", text="🎙️ Solicitar Áudio à API")
 
         except Exception as e:
             self.label_status.configure(text=f"❌ Erro: {str(e)}", text_color="red")
-        finally:
             self.btn_gerar.configure(state="normal", text="🎙️ Solicitar Áudio à API")
+            
 
 if __name__ == "__main__":
     app = TTSClientApp()
