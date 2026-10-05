@@ -34,7 +34,6 @@ class TTSClientApp(ctk.CTk):
         ]
         
         self.vozes_masc = [
-            "en-CA-ClaraNeural",
             # Nativos
             "pt-BR-AntonioNeural",
             "pt-PT-DuarteNeural", # Sotaque de Portugal
