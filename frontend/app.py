@@ -34,7 +34,6 @@ class TTSClientApp(ctk.CTk):
         ]
         
         self.vozes_masc = [
-            "en-CA-ClaraNeural",
             # Nativos
             "pt-BR-AntonioNeural",
             "pt-PT-DuarteNeural", # Sotaque de Portugal
@@ -212,7 +211,7 @@ class TTSClientApp(ctk.CTk):
             payload = {"personagens": personagens_payload, "roteiro": roteiro_payload}
 
             
-            resposta = requests.post("http://localhost:8000/gerar", json=payload)
+            resposta = requests.post("https://tts-studio-wszb.onrender.com/gerar", json=payload)
 
             if resposta.status_code == 200:
                 # 1. Pega o nome digitado e garante que termine em .mp3
