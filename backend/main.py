@@ -9,6 +9,11 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
+import edge_tts.communicate as communicate
+from edge_tts.constants import TRUSTED_CLIENT_TOKEN
+
+# Aplica o patch dinamicamente para usar o novo endpoint da Microsoft (Issue #490)
+communicate.WSS_URL = f"wss://api.msedgeservices.com/tts/cognitiveservices/websocket/v1?Ocp-Apim-Subscription-Key={TRUSTED_CLIENT_TOKEN}"
 
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
