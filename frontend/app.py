@@ -5,6 +5,7 @@ import threading
 import os
 import re
 import urllib.parse
+import winsound
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -236,6 +237,7 @@ class TTSClientApp(ctk.CTk):
                     
                 def sucesso_ui():
                     self.label_status.configure(text=f"✅ Salvo como {nome_arq}", text_color="green")
+                    winsound.MessageBeep(winsound.MB_ICONHAND);
                     self.btn_gerar.configure(state="normal", text="🎙️ 2. Solicitar Áudio à API")
                     self.auto_incrementar_nome()
                     
