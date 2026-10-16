@@ -8,6 +8,8 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from pydub import AudioSegment
+from pydub.silence import split_on_silence
 from typing import List
 
 if sys.platform == 'win32':
@@ -36,6 +38,28 @@ class LinhaRoteiro(BaseModel):
 class TTSRequest(BaseModel):
     personagens: List[PersonagemConfig]
     roteiro: List[LinhaRoteiro]
+
+def otimizar_ritmo_audio(caminho_arquivo, min_silence_len=1000, silence_thresh=-40, keep_silence=500):
+    """Remove pausas exageradas mantendo um respiro natural."""
+    audio = AudioSegment.from_file(caminho_arquivo)
+    
+    trechos = split_on_silence(
+        audio,
+        min_silence_len=min_silence_len,
+        silence_thresh=silence_thresh,
+        keep_silence=keep_silence
+    )
+    
+    if not trechos:
+        return
+        
+    audio_otimizado = trechos[0]
+    for trecho in trechos[1:]:
+        audio_otimizado += trecho
+        print("+1 otm")
+        
+    formato = caminho_arquivo.split('.')[1]
+    audio_otimizado.export(caminho_arquivo, format=formato)
 
 def limpar_metadados_mp3(caminho):
     with open(caminho, 'rb') as f:
@@ -102,6 +126,8 @@ async def gerar_audio(req: TTSRequest):
             outfile.write(limpar_metadados_mp3(f))
             
     shutil.rmtree("temp_audios", ignore_errors=True)
+
+    otimizar_ritmo_audio(arquivo_final)
     
     # === PREPARA O CABEÇALHO COM OS AVISOS ===
     headers = {}
@@ -113,7 +139,6 @@ async def gerar_audio(req: TTSRequest):
     print("✅ Áudio final gerado com sucesso!")
     # Envia o arquivo e embute os headers
     return FileResponse(arquivo_final, media_type="audio/mpeg", filename="audio_roteiro.mp3", headers=headers)
-
 
 if __name__ == "__main__":
     import uvicorn

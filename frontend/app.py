@@ -3,6 +3,7 @@ from tkinter import filedialog, messagebox
 import requests
 import threading
 import os
+
 import re
 import urllib.parse
 import winsound
@@ -108,7 +109,7 @@ class TTSClientApp(ctk.CTk):
         
         self.label_status = ctk.CTkLabel(self.frame_roteiro, text="Pronto para edição.", text_color="gray")
         self.label_status.pack(pady=5)
-
+    
     def adicionar_personagem_ui(self, nome, voz_padrao, pitch_padrao):
         """Cria uma nova linha de formulário visual para um personagem"""
         if nome in self.personagens_widgets:
@@ -212,7 +213,7 @@ class TTSClientApp(ctk.CTk):
             payload = {"personagens": personagens_payload, "roteiro": roteiro_payload}
 
             
-            resposta = requests.post("https://tts-studio-wszb.onrender.com/gerar", json=payload)
+            resposta = requests.post("http://localhost:8000/gerar", json=payload)
 
             if resposta.status_code == 200:
                 # 1. Pega o nome digitado e garante que termine em .mp3
@@ -230,7 +231,7 @@ class TTSClientApp(ctk.CTk):
                 # === INTERCEPTA E DECODIFICA OS AVISOS DO BACKEND ===
                 avisos_header = resposta.headers.get("X-Avisos")
                 alertas = ""
-                if avisos_header:
+                if avisos_header:   
                     avisos_decodificados = urllib.parse.unquote(avisos_header)
                     # Quebra o texto de volta para lista e junta com quebra de linha (\n)
                     alertas = "\n\n".join(avisos_decodificados.split("||"))
